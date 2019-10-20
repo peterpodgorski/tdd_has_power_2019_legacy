@@ -1,0 +1,4 @@
+USD = 'USD'
+GBP = 'GBP'
+EUR = 'EUR'
+BASE_CURRENCY = GBP
