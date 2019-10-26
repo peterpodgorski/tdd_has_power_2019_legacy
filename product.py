@@ -5,6 +5,10 @@ from fake_django import ObjectNotFound, Manager, Model
 from utils import exchange
 
 
+class PriceNotFound(Exception):
+    pass
+
+
 class Price(Model):
     objects = Manager()
 
@@ -17,6 +21,17 @@ class Price(Model):
         self.currency = currency
 
 
+class Pricing:
+    def price_for(self, product, currency):
+        try:
+            price = Price.objects.get(product_id=product.id, currency=currency)
+        except ObjectNotFound:
+            price = Price.objects.get(
+                product_id=product.parent_id, currency=currency
+            )
+        return price.amount
+
+
 class Product(Model):
     objects = Manager()
 
@@ -27,35 +42,10 @@ class Product(Model):
         self._parent_cache = None
 
     def get_price(self, currency):
-        if self.parent_id is None:
-            price = Price.objects.filter(product_id=self.id, currency=currency)
-            if price:
-                return price[0].amount
-            else:
-                to_exchange_price = Price.objects.get(
-                    product_id=self.id, currency=BASE_CURRENCY
-                )
-                return exchange(to_exchange_price.amount, currency)
-        else:
+        try:
+            return Pricing().price_for(self, currency)
+        except ObjectNotFound:
             try:
-                price = Price.objects.get(product_id=self.id, currency=currency)
+                return exchange(Pricing().price_for(self, BASE_CURRENCY), currency)
             except ObjectNotFound:
-                try:
-                    price = Price.objects.get(
-                        product_id=self.parent_id, currency=currency
-                    )
-                except ObjectNotFound:
-                    try:
-                        to_exchange_price = Price.objects.get(
-                            product_id=self.id, currency=BASE_CURRENCY
-                        )
-                        return exchange(to_exchange_price.amount, currency)
-                    except ObjectNotFound:
-                        to_exchange_price = Price.objects.get(
-                            product_id=self.parent_id, currency=BASE_CURRENCY
-                        )
-                        return exchange(to_exchange_price.amount, currency)
-                else:
-                    return price.amount
-            else:
-                return price.amount
+                raise PriceNotFound()
